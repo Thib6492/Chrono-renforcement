@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Chrono renforcement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Mise en page : une colonne étroite, trois vues (programme, séance, fin).
+   En séance, tout l'écran prend la couleur de la phase : bleu pour l'effort, vert pour le repos. */
+:root {
+  --bg: #E9EEF1;
+  --surface: #FFFFFF;
+  --ink: #0F1A24;
+  --muted: #566876;
+  --line: #D2DBE1;
+  --line-strong: #97A7B3;
+  --hover: #EDF1F4;
+  --effort: #2547D9;
+  --effort-ink: #FFFFFF;
+  --stage-effort: #2547D9;
+  --stage-rest: #0F7F63;
+  --stage-done: #0F1A24;
+  --stage-ink: #FFFFFF;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1118;
+    --surface: #151E28;
+    --ink: #E7EDF2;
+    --muted: #93A4B2;
+    --line: #263444;
+    --line-strong: #4B5D6D;
+    --hover: #1E2A36;
+    --effort: #7D95FF;
+    --effort-ink: #0B1118;
+    --stage-effort: #2F4FE0;
+    --stage-done: #1B2835;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1118;
+  --surface: #151E28;
+  --ink: #E7EDF2;
+  --muted: #93A4B2;
+  --line: #263444;
+  --line-strong: #4B5D6D;
+  --hover: #1E2A36;
+  --effort: #7D95FF;
+  --effort-ink: #0B1118;
+  --stage-effort: #2F4FE0;
+  --stage-done: #1B2835;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+  transition: background-color .35s ease;
+}
+body[data-mode="run"][data-phase="work"] { background: var(--stage-effort); }
+body[data-mode="run"][data-phase="rest"] { background: var(--stage-rest); }
+body[data-mode="done"] { background: var(--stage-done); }
+body[data-mode="run"], body[data-mode="done"] { color: var(--stage-ink); }
+
+.app {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-block: 20px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button { font: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--effort); outline-offset: 2px; }
+body[data-mode="run"] button:focus-visible, body[data-mode="done"] button:focus-visible { outline-color: var(--stage-ink); }
+
+/* Vue programme */
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 1;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.pill {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink);
+  font-size: .85rem;
+  font-weight: 600;
+}
+.pill[aria-pressed="false"] { color: var(--muted); }
+.summary { margin: 8px 0 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+#list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.empty { padding: 28px 16px; text-align: center; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 14px; }
+.ex { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px 2px; }
+.ex-head { display: flex; align-items: center; gap: 10px; padding-bottom: 6px; }
+.ex-idx { flex: none; min-width: 1.1em; font-family: var(--font-display); font-weight: 600; font-size: 1.4rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ex-name {
+  flex: 1; min-width: 0;
+  padding: 8px 2px;
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: transparent; color: var(--ink);
+  font: 600 1.05rem var(--font-body);
+}
+.ex-name::placeholder { color: var(--muted); font-weight: 400; }
+.tools { flex: none; display: flex; gap: 2px; }
+.tbtn { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+.tbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.tbtn:disabled { opacity: .3; cursor: default; }
+.tbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.field > div:first-child { min-width: 0; }
+.field label { display: block; font-weight: 600; }
+.sub { display: block; font-size: .8rem; color: var(--muted); }
+.stepper { flex: none; display: grid; grid-template-columns: 44px 64px 44px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stepper button { height: 44px; border: 0; background: var(--hover); color: var(--ink); font-size: 1.4rem; line-height: 1; }
+.stepper button:active { background: var(--line); }
+.stepper input {
+  width: 100%; height: 44px; padding: 0;
+  border: 0; border-radius: 0; text-align: center;
+  background: var(--surface); color: var(--ink);
+  font: 600 1.6rem var(--font-display);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.add {
+  width: 100%; min-height: 48px; margin-top: 12px;
+  border: 1.5px dashed var(--line-strong); border-radius: 12px;
+  background: transparent; color: var(--ink); font-weight: 600;
+}
+.add:hover { background: var(--hover); }
+.setup { margin-bottom: 12px; padding: 12px 14px 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { min-height: 44px; border: 0; background: var(--hover); color: var(--ink); font-weight: 600; }
+.seg button[aria-checked="true"] { background: var(--effort); color: var(--effort-ink); }
+.setup > .sub { margin: 10px 0 12px; }
+#list[data-org="circuit"] .field-sets { display: none; }
+.history { margin-top: 28px; }
+.history h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 700; font-size: 1.4rem; letter-spacing: .04em; text-transform: uppercase; }
+#hist-list { list-style: none; margin: 0; padding: 0; }
+.hist { padding: 12px 0; border-top: 1px solid var(--line); }
+.hist-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hist-date { font-weight: 600; text-transform: capitalize; }
+.hist-dur { font-family: var(--font-display); font-weight: 600; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.hist-sub, .hist-names { margin: 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.hist-empty { padding: 12px 0; border-top: 1px solid var(--line); color: var(--muted); }
+.save-note { margin: 10px 0 0; font-size: .9rem; opacity: .85; }
+.status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: .9rem; }
+.status button { border: 0; background: transparent; color: var(--effort); font-weight: 700; padding: 6px 4px; }
+
+.startbar { position: sticky; bottom: 0; margin-top: 16px; padding-block: 12px; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.start {
+  width: 100%; min-height: 56px;
+  border: 0; border-radius: 14px;
+  background: var(--effort); color: var(--effort-ink);
+  font-size: 1.1rem; font-weight: 700; letter-spacing: .01em;
+}
+.start:disabled { opacity: .4; cursor: default; }
+
+/* Vues séance et fin */
+.stage {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 20px;
+  min-height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px);
+}
+.stage-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .95rem; font-weight: 500; }
+.ghost {
+  min-height: 40px; padding: 0 16px;
+  border: 1.5px solid color-mix(in srgb, var(--stage-ink) 55%, transparent);
+  border-radius: 99px; background: transparent; color: var(--stage-ink); font-weight: 600; font-size: .9rem;
+}
+.phase { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; letter-spacing: .16em; text-transform: uppercase; opacity: .9; }
+.run-name { margin: 6px 0 4px; font-family: var(--font-display); font-weight: 700; font-size: clamp(2rem, 9vw, 3.2rem); line-height: 1.05; text-wrap: balance; overflow-wrap: anywhere; }
+.run-set { margin: 0; font-size: 1.05rem; opacity: .92; }
+.clock { margin: 6px 0 14px; font-family: var(--font-display); font-weight: 700; font-size: clamp(6rem, 34vw, 11rem); line-height: .95; font-variant-numeric: tabular-nums; }
+.bar { height: 8px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--stage-ink) 25%, transparent); }
+.bar span { display: block; width: 100%; height: 100%; background: var(--stage-ink); transform-origin: left center; transform: scaleX(0); }
+.meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0; font-size: .95rem; opacity: .92; font-variant-numeric: tabular-nums; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sbtn { min-height: 64px; padding: 0 12px; border: 2px solid var(--stage-ink); border-radius: 14px; background: transparent; color: var(--stage-ink); font-size: 1.05rem; font-weight: 700; }
+.sbtn.primary { background: var(--stage-ink); }
+body[data-phase="work"] .sbtn.primary { color: var(--stage-effort); }
+body[data-phase="rest"] .sbtn.primary { color: var(--stage-rest); }
+body[data-mode="done"] .sbtn.primary { color: var(--stage-done); }
+.done-title { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(2.4rem, 12vw, 4rem); line-height: 1; text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
+}
+.account { padding-bottom: 12px; }
+.account .sub { margin: 0 0 10px; }
+.login-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.login-row input { flex: 1 1 200px; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.login-row .pill { min-height: 44px; }
+.acc-in { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.acc-in .sub { display: block; margin: 0; }
+.acc-mail { display: block; font-weight: 600; overflow-wrap: anywhere; }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <main id="view-edit">
+    <div class="top">
+      <h1>Chrono renforcement</h1>
+      <button id="sound-btn" class="pill" type="button" aria-pressed="true">Son activé</button>
+    </div>
+    <section id="account" class="setup account" aria-label="Compte">
+      <div id="acc-out">
+        <p class="sub">Connecte-toi pour garder ton programme et ton historique en ligne, sur tous tes appareils.</p>
+        <form id="login-form" class="login-row">
+          <input id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="ton@email.fr" aria-label="Adresse e-mail" required>
+          <button id="login-btn" class="pill" type="submit">Recevoir le lien</button>
+        </form>
+        <p id="login-msg" class="sub" role="status"></p>
+      </div>
+      <div id="acc-in" class="acc-in" hidden>
+        <span><span class="sub">Connecté</span><span id="acc-mail" class="acc-mail"></span></span>
+        <button id="logout-btn" class="pill" type="button">Se déconnecter</button>
+      </div>
+    </section>
+    <p id="summary" class="summary"></p>
+    <section id="setup" class="setup" aria-label="Organisation de la séance">
+      <div id="seg" class="seg" role="radiogroup" aria-label="Organisation de la séance">
+        <button type="button" role="radio" aria-checked="true" data-mode="exercise">Par exercice</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="circuit">En circuit</button>
+      </div>
+      <p id="mode-help" class="sub"></p>
+      <div id="circuit-fields" hidden></div>
+    </section>
+    <ol id="list"></ol>
+    <p id="status" class="status" role="status" hidden><span id="status-text"></span><button id="undo-btn" type="button">Annuler</button></p>
+    <button id="add-btn" class="add" type="button">+ Ajouter un exercice</button>
+    <section class="history" aria-labelledby="hist-title">
+      <h2 id="hist-title">Séances faites</h2>
+      <ul id="hist-list"></ul>
+    </section>
+    <div class="startbar"><button id="start-btn" class="start" type="button">Démarrer la séance</button></div>
+  </main>
+
+  <section id="view-run" class="stage" hidden>
+    <div class="stage-top">
+      <button id="stop-btn" class="ghost" type="button">Arrêter</button>
+      <span id="progress-text"></span>
+    </div>
+    <div>
+      <p id="phase-label" class="phase"></p>
+      <h2 id="run-name" class="run-name"></h2>
+      <p id="run-set" class="run-set"></p>
+      <div id="clock" class="clock" role="timer" aria-live="off">00:00</div>
+      <div id="bar" class="bar"><span id="bar-fill"></span></div>
+    </div>
+    <p class="meta"><span id="next-text"></span><span>Écoulé <span id="total">00:00</span></span></p>
+    <div class="controls">
+      <button id="pause-btn" class="sbtn primary" type="button">Pause</button>
+      <button id="skip-btn" class="sbtn" type="button">Série faite</button>
+    </div>
+  </section>
+
+  <section id="view-done" class="stage" hidden>
+    <div></div>
+    <div>
+      <p class="phase">Bien joué</p>
+      <h2 class="done-title">Séance terminée</h2>
+      <div id="done-time" class="clock">00:00</div>
+      <p id="done-detail" class="run-set"></p>
+      <p id="done-save" class="save-note" role="status"></p>
+    </div>
+    <div class="controls">
+      <button id="again-btn" class="sbtn primary" type="button">Refaire la séance</button>
+      <button id="back-btn" class="sbtn" type="button">Modifier le programme</button>
+    </div>
+  </section>
+</div>
+
+<script>
+/* À REMPLIR : adresse du projet et clé publique (anon / publishable) trouvées dans Supabase > Project Settings > API. Jamais la clé secrète. */
+window.CHRONO_CONFIG = { url: 'https://TON-PROJET.supabase.co', key: 'TA-CLE-PUBLIQUE' };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var KEY = 'chrono-renforcement-v1';
+  var LIM = { sets: [1, 20], work: [0, 900], rest: [0, 900], rounds: [1, 20], roundRest: [0, 900] };
+  var STEP = { sets: 1, work: 5, rest: 5, rounds: 1, roundRest: 5 };
+  var FREE_SET_GUESS = 40;
+
+  var EXAMPLE = [
+    { name: 'Pompes · 12 reps', sets: 3, work: 0, rest: 60 },
+    { name: 'Squats · 20 reps', sets: 3, work: 0, rest: 60 },
+    { name: 'Planche', sets: 3, work: 30, rest: 60 },
+    { name: 'Fentes avant · 12 reps par jambe', sets: 3, work: 0, rest: 60 },
+    { name: 'Mountain climbers', sets: 3, work: 30, rest: 60 }
+  ];
+
+  var org = 'exercise', rounds = 3, roundRest = 90;
+  var nextId = 1, exs = [], sound = true, run = null, timerId = null, actx = null, wl = null;
+  var lastDeleted = null, statusTimer = null, stopTimer = null;
+
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+  function toInt(v, d) { var n = parseInt(v, 10); return isNaN(n) ? d : n; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function sanitize(e) {
+    return {
+      id: nextId++,
+      name: String(e && e.name || '').slice(0, 60),
+      sets: clamp(toInt(e && e.sets, 3), LIM.sets[0], LIM.sets[1]),
+      work: clamp(toInt(e && e.work, 0), LIM.work[0], LIM.work[1]),
+      rest: clamp(toInt(e && e.rest, 60), LIM.rest[0], LIM.rest[1])
+    };
+  }
+  function fmt(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+  function fmtDur(s) { return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : ''); }
+  function exName(i) { return (exs[i].name || '').trim() || 'Exercice ' + (i + 1); }
+
+  function load() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    if (saved && Array.isArray(saved.exs)) {
+      exs = saved.exs.map(sanitize);
+      sound = saved.sound !== false;
+      org = saved.org === 'circuit' ? 'circuit' : 'exercise';
+      rounds = clamp(toInt(saved.rounds, 3), LIM.rounds[0], LIM.rounds[1]);
+      roundRest = clamp(toInt(saved.roundRest, 90), LIM.roundRest[0], LIM.roundRest[1]);
+    } else {
+      exs = EXAMPLE.map(sanitize);
+    }
+  }
+  var edited = false, progTimer = null, progBusy = false, progDirty = false;
+  function persistLocal() {
+    try { localStorage.setItem(KEY, JSON.stringify({ exs: exs, sound: sound, org: org, rounds: rounds, roundRest: roundRest })); } catch (e) {}
+  }
+  function save() { persistLocal(); edited = true; scheduleProgramSave(); }
+
+  /* ---------- Vue programme ---------- */
+  var ICON = {
+    up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    del: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+  function subText(ex, f) {
+    if (f === 'sets') return 'Nombre de séries';
+    if (f === 'work') return ex.work === 0 ? 'Libre : tu valides toi-même' : 'Durée de chaque série, en secondes';
+    return ex.rest === 0 ? 'Pas de repos' : 'Repos entre séries, en secondes';
+  }
+  function fieldHTML(ex, f, label) {
+    return '<div class="field' + (f === 'sets' ? ' field-sets' : '') + '"><div><label for="' + f + '-' + ex.id + '">' + label + '</label><span class="sub" data-sub="' + f + '">' + subText(ex, f) + '</span></div>' +
+      '<div class="stepper"><button type="button" data-act="dec" data-f="' + f + '" aria-label="Diminuer ' + label.toLowerCase() + '">−</button>' +
+      '<input id="' + f + '-' + ex.id + '" type="number" inputmode="numeric" step="1" min="' + LIM[f][0] + '" max="' + LIM[f][1] + '" value="' + ex[f] + '" data-f="' + f + '">' +
+      '<button type="button" data-act="inc" data-f="' + f + '" aria-label="Augmenter ' + label.toLowerCase() + '">+</button></div></div>';
+  }
+  function renderList() {
+    var list = $('#list');
+    list.dataset.org = org;
+    if (!exs.length) {
+      list.innerHTML = '<li class="empty">Aucun exercice pour l’instant. Ajoute le premier ci-dessous.</li>';
+    } else {
+      list.innerHTML = exs.map(function (ex, i) {
+        return '<li class="ex" data-id="' + ex.id + '">' +
+          '<div class="ex-head"><span class="ex-idx">' + (i + 1) + '</span>' +
+          '<input id="name-' + ex.id + '" class="ex-name" type="text" maxlength="60" placeholder="Nom de l’exercice" aria-label="Nom de l’exercice ' + (i + 1) + '" value="' + esc(ex.name) + '" data-f="name">' +
+          '<div class="tools">' +
+          '<button class="tbtn" type="button" data-act="up" aria-label="Monter"' + (i === 0 ? ' disabled' : '') + '>' + ICON.up + '</button>' +
+          '<button class="tbtn" type="button" data-act="down" aria-label="Descendre"' + (i === exs.length - 1 ? ' disabled' : '') + '>' + ICON.down + '</button>' +
+          '<button class="tbtn" type="button" data-act="del" aria-label="Supprimer">' + ICON.del + '</button>' +
+          '</div></div>' +
+          fieldHTML(ex, 'sets', 'Séries') + fieldHTML(ex, 'work', 'Chrono') + fieldHTML(ex, 'rest', 'Repos') +
+          '</li>';
+      }).join('');
+    }
+    updateSummary();
+  }
+  function estimateSeconds() {
+    var t = 0, n = exs.length;
+    if (org === 'circuit' && n) {
+      var round = 0;
+      exs.forEach(function (ex, i) { round += (ex.work > 0 ? ex.work : FREE_SET_GUESS) + (i < n - 1 ? ex.rest : 0); });
+      return Math.max(0, round * rounds + roundRest * (rounds - 1));
+    }
+    exs.forEach(function (ex) { t += ex.sets * (ex.work > 0 ? ex.work : FREE_SET_GUESS) + ex.sets * ex.rest; });
+    if (exs.length) t -= exs[exs.length - 1].rest;
+    return Math.max(0, t);
+  }
+  function updateSummary() {
+    var n = exs.length, s = exs.reduce(function (a, e) { return a + e.sets; }, 0);
+    $('#summary').textContent = n
+      ? n + ' exercice' + (n > 1 ? 's' : '') + ' · ' + (org === 'circuit' ? rounds + ' tour' + (rounds > 1 ? 's' : '') : s + ' série' + (s > 1 ? 's' : '')) + ' · environ ' + Math.max(1, Math.round(estimateSeconds() / 60)) + ' min'
+      : 'Aucun exercice';
+    $('#start-btn').disabled = !n;
+  }
+  function byId(id) { return exs.filter(function (e) { return e.id === id; })[0]; }
+  function refreshSubs(li, ex) {
+    ['sets', 'work', 'rest'].forEach(function (f) { li.querySelector('[data-sub="' + f + '"]').textContent = subText(ex, f); });
+  }
+  function showStatus(msg, withUndo) {
+    $('#status-text').textContent = msg;
+    $('#undo-btn').hidden = !withUndo;
+    $('#status').hidden = false;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { $('#status').hidden = true; lastDeleted = null; }, 6000);
+  }
+
+  $('#list').addEventListener('input', function (e) {
+    var li = e.target.closest('.ex'); var f = e.target.dataset && e.target.dataset.f;
+    if (!li || !f) return;
+    var ex = byId(+li.dataset.id);
+    if (f === 'name') { ex.name = e.target.value; }
+    else {
+      var v = parseInt(e.target.value, 10);
+      if (isNaN(v)) return;
+      ex[f] = clamp(v, LIM[f][0], LIM[f][1]);
+      refreshSubs(li, ex);
+    }
+    save(); updateSummary();
+  });
+  $('#list').addEventListener('change', function (e) {
+    var li = e.target.closest('.ex'); var f = e.target.dataset && e.target.dataset.f;
+    if (!li || !f || f === 'name') return;
+    var ex = byId(+li.dataset.id);
+    ex[f] = clamp(toInt(e.target.value, ex[f]), LIM[f][0], LIM[f][1]);
+    e.target.value = ex[f];
+    refreshSubs(li, ex); save(); updateSummary();
+  });
+  $('#list').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var li = b.closest('.ex'); var id = +li.dataset.id; var act = b.dataset.act;
+    var i = exs.indexOf(byId(id)); var ex = exs[i];
+    if (act === 'inc' || act === 'dec') {
+      var f = b.dataset.f;
+      ex[f] = clamp(ex[f] + (act === 'inc' ? 1 : -1) * STEP[f], LIM[f][0], LIM[f][1]);
+      li.querySelector('input[data-f="' + f + '"]').value = ex[f];
+      refreshSubs(li, ex); save(); updateSummary();
+    } else if (act === 'up' || act === 'down') {
+      var j = act === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= exs.length) return;
+      exs[i] = exs[j]; exs[j] = ex;
+      save(); renderList();
+      var again = document.querySelector('.ex[data-id="' + id + '"] [data-act="' + act + '"]');
+      if (again && !again.disabled) again.focus();
+      else { var other = document.querySelector('.ex[data-id="' + id + '"] [data-act="' + (act === 'up' ? 'down' : 'up') + '"]'); if (other) other.focus(); }
+    } else if (act === 'del') {
+      lastDeleted = { ex: ex, index: i };
+      exs.splice(i, 1);
+      save(); renderList();
+      showStatus('Exercice supprimé.', true);
+    }
+  });
+  $('#undo-btn').addEventListener('click', function () {
+    if (!lastDeleted) return;
+    exs.splice(lastDeleted.index, 0, lastDeleted.ex);
+    lastDeleted = null; save(); renderList();
+    $('#status').hidden = true;
+  });
+  $('#add-btn').addEventListener('click', function () {
+    var ex = sanitize({ name: '', sets: 3, work: 0, rest: 60 });
+    exs.push(ex); save(); renderList();
+    var input = $('#name-' + ex.id);
+    if (input) { input.focus(); input.scrollIntoView({ block: 'center' }); }
+  });
+  function gSub(f) {
+    if (f === 'rounds') return 'Combien de fois tu enchaînes tous les exercices';
+    return roundRest === 0 ? 'Pas de repos entre les tours' : 'Pause avant de recommencer, en secondes';
+  }
+  function globalField(f, label) {
+    var v = f === 'rounds' ? rounds : roundRest;
+    return '<div class="field"><div><label for="g-' + f + '">' + label + '</label><span class="sub" data-gsub="' + f + '">' + gSub(f) + '</span></div>' +
+      '<div class="stepper"><button type="button" data-gact="dec" data-g="' + f + '" aria-label="Diminuer ' + label.toLowerCase() + '">−</button>' +
+      '<input id="g-' + f + '" type="number" inputmode="numeric" step="1" min="' + LIM[f][0] + '" max="' + LIM[f][1] + '" value="' + v + '" data-g="' + f + '">' +
+      '<button type="button" data-gact="inc" data-g="' + f + '" aria-label="Augmenter ' + label.toLowerCase() + '">+</button></div></div>';
+  }
+  function refreshGSubs() {
+    ['rounds', 'roundRest'].forEach(function (f) { var el = document.querySelector('[data-gsub="' + f + '"]'); if (el) el.textContent = gSub(f); });
+  }
+  function renderSetup() {
+    document.querySelectorAll('#seg button').forEach(function (b) { b.setAttribute('aria-checked', String(b.dataset.mode === org)); });
+    $('#mode-help').textContent = org === 'circuit'
+      ? 'Tous les exercices à la suite avec leurs repos, puis on recommence : c’est un tour.'
+      : 'Toutes les séries d’un exercice, puis l’exercice suivant.';
+    var cf = $('#circuit-fields');
+    if (!cf.innerHTML) cf.innerHTML = globalField('rounds', 'Tours') + globalField('roundRest', 'Repos entre les tours');
+    cf.hidden = org !== 'circuit';
+  }
+  function setG(f, v) {
+    v = clamp(v, LIM[f][0], LIM[f][1]);
+    if (f === 'rounds') rounds = v; else roundRest = v;
+    return v;
+  }
+  $('#setup').addEventListener('click', function (e) {
+    var m = e.target.closest('button[data-mode]');
+    if (m) { org = m.dataset.mode; save(); renderSetup(); renderList(); return; }
+    var b = e.target.closest('button[data-gact]');
+    if (!b) return;
+    var f = b.dataset.g, cur = f === 'rounds' ? rounds : roundRest;
+    var v = setG(f, cur + (b.dataset.gact === 'inc' ? 1 : -1) * STEP[f]);
+    $('#g-' + f).value = v;
+    refreshGSubs(); save(); updateSummary();
+  });
+  $('#setup').addEventListener('input', function (e) {
+    var f = e.target.tagName === 'INPUT' && e.target.dataset.g;
+    if (!f) return;
+    var v = parseInt(e.target.value, 10);
+    if (isNaN(v)) return;
+    setG(f, v); refreshGSubs(); save(); updateSummary();
+  });
+  $('#setup').addEventListener('change', function (e) {
+    var f = e.target.tagName === 'INPUT' && e.target.dataset.g;
+    if (!f) return;
+    e.target.value = setG(f, toInt(e.target.value, f === 'rounds' ? rounds : roundRest));
+    refreshGSubs(); save(); updateSummary();
+  });
+  function paintSound() {
+    var b = $('#sound-btn');
+    b.textContent = sound ? 'Son activé' : 'Son coupé';
+    b.setAttribute('aria-pressed', String(sound));
+  }
+  $('#sound-btn').addEventListener('click', function () {
+    sound = !sound; paintSound(); persistLocal();
+    if (sound) { initAudio(); setTimeout(function () { beep('end'); }, 350); }
+  });
+
+  /* ---------- Historique des séances ---------- */
+  var SKEY = 'chrono-renforcement-sessions-v1';
+  var db = null, sessions = [];
+  function localLoad() { try { var a = JSON.parse(localStorage.getItem(SKEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function localSave() { try { localStorage.setItem(SKEY, JSON.stringify(sessions.slice(0, 100))); } catch (e) {} }
+  function fmtDate(iso) {
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return String(iso); }
+  }
+  function renderSessions() {
+    var ul = $('#hist-list');
+    if (!sessions.length) {
+      ul.innerHTML = '<li class="hist-empty">Aucune séance enregistrée pour l’instant. La prochaine apparaîtra ici dès qu’elle est terminée.</li>';
+      return;
+    }
+    ul.innerHTML = sessions.slice(0, 10).map(function (r) {
+      var ex = r.exercises || [], n = ex.length;
+      var total = ex.reduce(function (a, e) { return a + (e.sets || 0); }, 0);
+      var how = r.org === 'circuit' ? r.rounds + ' tour' + (r.rounds > 1 ? 's' : '') + ' en circuit' : total + ' série' + (total > 1 ? 's' : '');
+      var names = ex.map(function (e) { return esc(e.name || 'Exercice'); }).join(', ');
+      return '<li class="hist"><div class="hist-top"><span class="hist-date">' + esc(fmtDate(r.date)) + '</span><span class="hist-dur">' + fmt(r.durationSec || 0) + '</span></div>' +
+        '<p class="hist-sub">' + n + ' exercice' + (n > 1 ? 's' : '') + ' · ' + how + '</p><p class="hist-names">' + names + '</p></li>';
+    }).join('');
+  }
+  function loadSessions() { sessions = localLoad(); renderSessions(); }
+  function connectDb(d) {
+    db = d;
+    loadProgram();
+    d.collection('sessions').orderBy('date', 'desc').limit(50).get().then(function (snap) {
+      sessions = snap.docs.map(function (x) { var o = x.data() || {}; o.id = x.id; return o; });
+      renderSessions();
+    }).catch(function () {});
+  }
+  function disconnectDb() { db = null; sessions = localLoad(); renderSessions(); }
+
+  /* ---------- Supabase : connexion par lien magique et stockage ---------- */
+  function makeAdapter(client, uid) {
+    function toRow(r) { return { id: r.id, user_id: uid, date: r.date, duration_sec: r.durationSec || 0, org: r.org || 'exercise', rounds: r.rounds || 0, exercises: r.exercises || [] }; }
+    function fromRow(r) { return { id: r.id, date: r.date, durationSec: r.duration_sec, org: r.org, rounds: r.rounds, exercises: r.exercises || [] }; }
+    function check(res) { if (res.error) throw res.error; return res; }
+    return {
+      collection: function () {
+        var asc = false, lim = 50;
+        var q = {
+          orderBy: function (f, dir) { asc = dir === 'asc'; return q; },
+          limit: function (n) { lim = n; return q; },
+          get: function () {
+            return client.from('sessions').select('*').order('date', { ascending: asc }).limit(lim).then(check).then(function (res) {
+              return { docs: (res.data || []).map(function (r) { var o = fromRow(r); return { id: o.id, exists: true, data: function () { return o; } }; }) };
+            });
+          },
+          doc: function () {
+            return { set: function (rec) { return client.from('sessions').upsert(toRow(rec)).then(check); } };
+          }
+        };
+        return q;
+      },
+      doc: function () {
+        return {
+          get: function () {
+            return client.from('program').select('data').eq('user_id', uid).maybeSingle().then(check).then(function (res) {
+              var d = res.data && res.data.data;
+              return { exists: !!d, data: function () { return d; } };
+            });
+          },
+          set: function (body) { return client.from('program').upsert({ user_id: uid, data: body, updated_at: new Date().toISOString() }).then(check); }
+        };
+      }
+    };
+  }
+  function initAuth() {
+    var acc = $('#account');
+    var cfg = window.CHRONO_CONFIG || {};
+    if (!window.supabase || !cfg.url || !cfg.key || /TON-PROJET|TA-CLE/.test(cfg.url + cfg.key)) { acc.hidden = true; return; }
+    var client = window.supabase.createClient(cfg.url, cfg.key);
+    var currentUid = null;
+    function apply(session) {
+      var uid = session && session.user ? session.user.id : null;
+      if (uid === currentUid) return;
+      currentUid = uid;
+      if (uid) {
+        $('#acc-out').hidden = true; $('#acc-in').hidden = false;
+        $('#acc-mail').textContent = session.user.email || '';
+        connectDb(makeAdapter(client, uid));
+      } else {
+        $('#acc-out').hidden = false; $('#acc-in').hidden = true;
+        disconnectDb();
+      }
+    }
+    client.auth.onAuthStateChange(function (ev, session) { setTimeout(function () { apply(session); }, 0); });
+    $('#login-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = $('#login-email').value.trim();
+      if (!email) return;
+      var msg = $('#login-msg'), btn = $('#login-btn');
+      btn.disabled = true; msg.textContent = 'Envoi du lien…';
+      client.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } }).then(function (res) {
+        btn.disabled = false;
+        msg.textContent = res.error ? 'Envoi impossible : ' + res.error.message : 'Lien envoyé. Ouvre-le depuis cet appareil pour te connecter.';
+      }).catch(function () { btn.disabled = false; msg.textContent = 'Envoi impossible. Vérifie ta connexion.'; });
+    });
+    $('#logout-btn').addEventListener('click', function () { client.auth.signOut(); });
+  }
+
+  function scheduleProgramSave() {
+    if (!db) return;
+    clearTimeout(progTimer);
+    progTimer = setTimeout(flushProgram, 800);
+  }
+  function flushProgram() {
+    if (!db) return;
+    if (progBusy) { progDirty = true; return; }
+    progBusy = true; progDirty = false;
+    var body = {
+      exs: exs.map(function (e) { return { name: e.name, sets: e.sets, work: e.work, rest: e.rest }; }),
+      org: org, rounds: rounds, roundRest: roundRest,
+      updatedAt: new Date().toISOString()
+    };
+    db.doc('program/current').set(body).catch(function () {}).then(function () {
+      progBusy = false;
+      if (progDirty) flushProgram();
+    });
+  }
+  function loadProgram() {
+    db.doc('program/current').get().then(function (snap) {
+      if (edited || run) return;
+      if (!snap.exists) { scheduleProgramSave(); return; }
+      var s = snap.data() || {};
+      if (!Array.isArray(s.exs)) return;
+      exs = s.exs.map(sanitize);
+      org = s.org === 'circuit' ? 'circuit' : 'exercise';
+      rounds = clamp(toInt(s.rounds, 3), LIM.rounds[0], LIM.rounds[1]);
+      roundRest = clamp(toInt(s.roundRest, 90), LIM.roundRest[0], LIM.roundRest[1]);
+      persistLocal();
+      var g1 = $('#g-rounds'), g2 = $('#g-roundRest');
+      if (g1) g1.value = rounds;
+      if (g2) g2.value = roundRest;
+      refreshGSubs(); renderSetup(); renderList();
+    }).catch(function () {});
+  }
+  function saveSession(totalMs) {
+    var circ = org === 'circuit';
+    var rec = {
+      id: 's' + Date.now(),
+      date: new Date().toISOString(),
+      durationSec: Math.round(totalMs / 1000),
+      org: org,
+      rounds: circ ? rounds : 0,
+      exercises: exs.map(function (e, i) { return { name: exName(i), sets: circ ? rounds : e.sets, work: e.work, rest: e.rest }; })
+    };
+    sessions.unshift(rec);
+    renderSessions();
+    var note = $('#done-save');
+    if (db) {
+      note.textContent = 'Enregistrement dans ton historique…';
+      db.collection('sessions').doc(rec.id).set(rec).then(function () {
+        note.textContent = 'Séance enregistrée dans ton historique.';
+      }).catch(function () {
+        localSave();
+        note.textContent = 'Enregistrement en ligne impossible. Séance gardée sur cet appareil.';
+      });
+    } else {
+      localSave();
+      note.textContent = 'Séance gardée sur cet appareil.';
+    }
+  }
+
+  /* ---------- Son, écran allumé ---------- */
+  var SND = { tick: [700, 0.1], end: [880, 0.18], work: [1040, 0.22], rest: [520, 0.22], doneA: [880, 0.18], doneB: [1175, 0.35] };
+  var audios = null, unlocked = false;
+  function makeWav(freq, dur, vol) {
+    var rate = 22050, n = Math.floor(rate * dur), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), i;
+    function str(o, s) { for (var k = 0; k < s.length; k++) v.setUint8(o + k, s.charCodeAt(k)); }
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (i = 0; i < n; i++) {
+      var env = Math.min(1, i / (rate * 0.005)) * Math.min(1, (n - i) / (rate * 0.03));
+      v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * freq * i / rate) * env * vol * 32767, true);
+    }
+    var bytes = new Uint8Array(buf), s = '';
+    for (i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return 'data:audio/wav;base64,' + btoa(s);
+  }
+  function initAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) {}
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !actx) actx = new AC();
+      if (actx && actx.state === 'suspended') actx.resume();
+    } catch (e) {}
+    if (!audios && !actx) {
+      audios = {};
+      Object.keys(SND).forEach(function (k) {
+        try { audios[k] = new Audio(makeWav(SND[k][0], SND[k][1], 0.85)); audios[k].preload = 'auto'; } catch (e) {}
+      });
+    }
+    if (unlocked || !audios) return;
+    unlocked = true;
+    Object.keys(audios).forEach(function (k) {
+      var a = audios[k];
+      try {
+        a.muted = true;
+        var done = function () { if (!a._used) { a.pause(); a.currentTime = 0; } a.muted = false; };
+        var p = a.play();
+        if (p && p.then) p.then(done).catch(function () { a.muted = false; }); else done();
+      } catch (e) { a.muted = false; }
+    });
+  }
+  function webBeep(name) {
+    if (!actx || !SND[name]) return;
+    try {
+      var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime, d = SND[name][1];
+      o.type = 'sine'; o.frequency.value = SND[name][0];
+      o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.start(t); o.stop(t + d + 0.02);
+    } catch (e) {}
+  }
+  function beep(name) {
+    if (!sound) return;
+    if (actx) {
+      try { if (actx.state === 'suspended') actx.resume(); } catch (e) {}
+      webBeep(name);
+      return;
+    }
+    var a = audios && audios[name];
+    if (a) {
+      try {
+        a._used = true; a.muted = false; a.currentTime = 0;
+        var p = a.play();
+        if (p && p.catch) p.catch(function () { webBeep(name); });
+        return;
+      } catch (e) {}
+    }
+    webBeep(name);
+  }
+  async function requestWake() {
+    try {
+      if ('wakeLock' in navigator && !wl) {
+        wl = await navigator.wakeLock.request('screen');
+        wl.addEventListener('release', function () { wl = null; });
+      }
+    } catch (e) {}
+  }
+  function releaseWake() { try { if (wl) { wl.release(); wl = null; } } catch (e) {} }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && run) requestWake(); });
+
+  /* ---------- Séance ---------- */
+  function setMode(m) {
+    document.body.dataset.mode = m;
+    $('#view-edit').hidden = m !== 'edit';
+    $('#view-run').hidden = m !== 'run';
+    $('#view-done').hidden = m !== 'done';
+    if (m !== 'run') delete document.body.dataset.phase;
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }
+  function buildSteps() {
+    var steps = [], n = exs.length;
+    if (org === 'circuit') {
+      for (var r = 1; r <= rounds; r++) {
+        for (var k = 0; k < n; k++) {
+          steps.push({ type: 'work', ex: k, set: r });
+          var last = r === rounds && k === n - 1;
+          var d = k < n - 1 ? exs[k].rest : roundRest;
+          if (!last && d > 0) steps.push({ type: 'rest', ex: k, set: r, dur: d });
+        }
+      }
+      return steps;
+    }
+    exs.forEach(function (ex, i) {
+      for (var s = 1; s <= ex.sets; s++) {
+        steps.push({ type: 'work', ex: i, set: s });
+        var isLast = i === n - 1 && s === ex.sets;
+        if (!isLast && ex.rest > 0) steps.push({ type: 'rest', ex: i, set: s, dur: ex.rest });
+      }
+    });
+    return steps;
+  }
+  function durationOf(st) { return (st.type === 'work' ? exs[st.ex].work : st.dur) * 1000; }
+  function describe(st) {
+    if (st.type === 'rest') return 'Repos ' + fmtDur(st.dur);
+    if (org === 'circuit') return exName(st.ex) + (st.ex === 0 ? ' · tour ' + st.set : '');
+    return exName(st.ex) + ' · série ' + st.set;
+  }
+
+  function startWorkout() {
+    if (!exs.length) return;
+    initAudio();
+    requestWake();
+    var now = performance.now();
+    run = { steps: buildSteps(), idx: 0, t0: now, total0: now, paused: false, pausedAt: 0, lastSec: null, stopArmed: false };
+    $('#stop-btn').textContent = 'Arrêter';
+    setMode('run');
+    startStep(0);
+    clearInterval(timerId);
+    timerId = setInterval(tick, 200);
+  }
+  function startStep(i, quiet) {
+    run.idx = i; run.t0 = performance.now(); run.lastSec = null; run.paused = false;
+    renderStage();
+    var st = run.steps[i];
+    if (!quiet) beep(st.type === 'work' ? 'work' : 'rest');
+    try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {}
+    tick();
+  }
+  function renderStage() {
+    var st = run.steps[run.idx], isRest = st.type === 'rest';
+    var ref = st;
+    var ex = exs[ref.ex], D = durationOf(st);
+    document.body.dataset.phase = isRest ? 'rest' : 'work';
+    $('#phase-label').textContent = isRest ? 'Repos' : 'Effort';
+    $('#run-name').textContent = exName(ref.ex);
+    $('#run-set').textContent = (isRest ? 'Terminé · ' : '') + (org === 'circuit' ? 'Tour ' + ref.set + ' sur ' + rounds : 'Série ' + ref.set + ' sur ' + ex.sets);
+    $('#progress-text').textContent = 'Exercice ' + (ref.ex + 1) + ' sur ' + exs.length;
+    var nxt = run.steps[run.idx + 1];
+    $('#next-text').textContent = nxt ? 'Ensuite · ' + describe(nxt) : 'Dernière série';
+    $('#skip-btn').textContent = isRest ? 'Passer le repos' : (D === 0 ? 'Série faite' : 'Passer la série');
+    $('#bar').style.visibility = D === 0 ? 'hidden' : 'visible';
+    $('#bar-fill').style.transform = 'scaleX(0)';
+    $('#clock').textContent = fmt(Math.round(D / 1000));
+    renderPause();
+  }
+  function renderPause() {
+    $('#pause-btn').textContent = run.paused ? 'Reprendre' : 'Pause';
+    var st = run.steps[run.idx];
+    $('#phase-label').textContent = (st.type === 'rest' ? 'Repos' : 'Effort') + (run.paused ? ' · en pause' : '');
+  }
+  function tick() {
+    if (!run || run.paused) return;
+    var now = performance.now(), st = run.steps[run.idx], D = durationOf(st), el = now - run.t0;
+    if (D === 0) {
+      $('#clock').textContent = fmt(Math.floor(el / 1000));
+    } else {
+      var rem = D - el;
+      if (rem <= 0) { beep('end'); next(true); return; }
+      var s = Math.ceil(rem / 1000);
+      $('#clock').textContent = fmt(s);
+      $('#bar-fill').style.transform = 'scaleX(' + Math.min(1, el / D) + ')';
+      if (s !== run.lastSec) { run.lastSec = s; if (s <= 3) beep('tick'); }
+    }
+    $('#total').textContent = fmt(Math.floor((now - run.total0) / 1000));
+  }
+  function next(quiet) {
+    if (!run) return;
+    if (run.idx + 1 >= run.steps.length) finish(); else startStep(run.idx + 1, quiet === true);
+  }
+  function togglePause() {
+    if (!run) return;
+    var now = performance.now();
+    if (!run.paused) { run.paused = true; run.pausedAt = now; }
+    else { var d = now - run.pausedAt; run.t0 += d; run.total0 += d; run.paused = false; }
+    renderPause();
+  }
+  function finish() {
+    var totalMs = performance.now() - run.total0;
+    clearInterval(timerId); timerId = null; releaseWake();
+    var circ = org === 'circuit';
+    var sets = circ ? rounds : exs.reduce(function (a, e) { return a + e.sets; }, 0);
+    run = null;
+    $('#done-time').textContent = fmt(Math.floor(totalMs / 1000));
+    $('#done-detail').textContent = exs.length + ' exercice' + (exs.length > 1 ? 's' : '') + ' · ' + sets + (circ ? ' tour' : ' série') + (sets > 1 ? 's' : '') + ' · temps total';
+    setMode('done');
+    saveSession(totalMs);
+    beep('doneA'); setTimeout(function () { beep('doneB'); }, 220);
+  }
+  function stopWorkout() {
+    clearInterval(timerId); timerId = null; releaseWake(); run = null;
+    setMode('edit');
+  }
+
+  $('#start-btn').addEventListener('click', startWorkout);
+  $('#pause-btn').addEventListener('click', togglePause);
+  $('#skip-btn').addEventListener('click', function () { next(); });
+  $('#again-btn').addEventListener('click', startWorkout);
+  $('#back-btn').addEventListener('click', function () { setMode('edit'); });
+  $('#stop-btn').addEventListener('click', function () {
+    if (!run) return;
+    if (!run.stopArmed) {
+      run.stopArmed = true;
+      $('#stop-btn').textContent = 'Confirmer l’arrêt';
+      clearTimeout(stopTimer);
+      stopTimer = setTimeout(function () { if (run) { run.stopArmed = false; $('#stop-btn').textContent = 'Arrêter'; } }, 3500);
+    } else {
+      clearTimeout(stopTimer); stopWorkout();
+    }
+  });
+
+  load();
+  paintSound();
+  renderSetup();
+  renderList();
+  loadSessions();
+  setMode('edit');
+  initAuth();
+})();
+</script>
+
+</body>
+</html>
